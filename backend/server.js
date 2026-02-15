@@ -25,12 +25,19 @@ app.use(express.json({ limit: "1mb" }));
 
 app.use(cors());
 
-const limiter = rateLimit({
+const generateLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 10,
+  max: 5,
   message: { error: "Too many requests, please try again later." },
 });
-app.use("/api/", limiter);
+app.use("/api/generate", generateLimiter);
+
+const statusLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  message: { error: "Too many status requests." },
+});
+app.use("/api/status", statusLimiter);
 
 // ─── Health check ───
 app.get("/api/health", (_req, res) => {
