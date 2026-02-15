@@ -1,0 +1,12 @@
+torch==2.4.1
+torchaudio==2.4.1
+torchvision==0.19.1
+transformers==4.57.0
+accelerate==1.12.0
+bitsandbytes==0.49.0
+tokenizers
+tqdm
+einops
+soundfile
+numpy==2.0.2
+runpod==1.7.7
