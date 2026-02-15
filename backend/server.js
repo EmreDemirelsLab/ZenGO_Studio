@@ -20,7 +20,21 @@ if (!RUNPOD_API_KEY || !RUNPOD_ENDPOINT_ID) {
 }
 
 // ─── Middleware ───
-app.use(helmet());
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:", "blob:"],
+        mediaSrc: ["'self'", "blob:"],
+        workerSrc: ["'self'", "blob:"],
+        connectSrc: ["'self'"],
+      },
+    },
+  })
+);
 app.use(express.json({ limit: "1mb" }));
 
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || "http://localhost:3000")
