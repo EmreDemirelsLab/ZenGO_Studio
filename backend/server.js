@@ -4,6 +4,8 @@ const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 
+const path = require("path");
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 
@@ -155,6 +157,12 @@ app.post("/api/cancel/:jobId", async (req, res) => {
     console.error(`[cancel] Error: ${err.message}`);
     res.status(500).json({ error: "Internal server error" });
   }
+});
+
+// ─── Serve frontend ───
+app.use(express.static(path.join(__dirname, "public")));
+app.get("*", (_req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
 // ─── Start server ───

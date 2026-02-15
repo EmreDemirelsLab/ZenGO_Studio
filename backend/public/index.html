@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HeartMuLa - AI Music Generator</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎵</text></svg>">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0f0c29 0%, #1a1a2e 50%, #16213e 100%);
+      color: #e0e0e0;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 20px;
+    }
+    h1 {
+      font-size: 42px;
+      font-weight: 800;
+      background: linear-gradient(90deg, #a78bfa, #ec4899, #f59e0b);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .subtitle { color: #8b8ba7; font-size: 16px; margin-top: 8px; }
+    .card {
+      background: rgba(255,255,255,0.05);
+      border-radius: 16px;
+      padding: 32px;
+      width: 100%;
+      max-width: 600px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.1);
+      margin-top: 40px;
+    }
+    label {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      color: #a78bfa;
+      margin-bottom: 6px;
+      margin-top: 20px;
+    }
+    label:first-child { margin-top: 0; }
+    textarea, input, select {
+      width: 100%;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 10px;
+      color: #e0e0e0;
+      font-size: 15px;
+      padding: 12px 14px;
+      outline: none;
+    }
+    textarea { min-height: 120px; resize: vertical; }
+    select option { background: #1a1a2e; color: #e0e0e0; }
+    button#generateBtn {
+      width: 100%;
+      padding: 16px;
+      font-size: 18px;
+      font-weight: 700;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      margin-top: 28px;
+      background: linear-gradient(90deg, #7c3aed, #ec4899);
+      color: white;
+      transition: opacity 0.2s;
+    }
+    button#generateBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .status-box {
+      margin-top: 24px;
+      padding: 16px;
+      border-radius: 10px;
+      background: rgba(167,139,250,0.1);
+      border: 1px solid rgba(167,139,250,0.3);
+      text-align: center;
+      display: none;
+    }
+    .status-box .icon { font-size: 24px; margin-bottom: 8px; }
+    .status-box .hint { font-size: 12px; color: #8b8ba7; margin-top: 6px; }
+    .error-box {
+      margin-top: 24px;
+      padding: 16px;
+      border-radius: 10px;
+      background: rgba(239,68,68,0.15);
+      border: 1px solid rgba(239,68,68,0.4);
+      color: #fca5a5;
+      text-align: center;
+      display: none;
+    }
+    .audio-section {
+      margin-top: 24px;
+      text-align: center;
+      display: none;
+    }
+    .audio-section .ready { font-size: 20px; color: #10b981; margin-bottom: 8px; }
+    .audio-section .time { font-size: 13px; color: #8b8ba7; margin-bottom: 12px; }
+    audio { width: 100%; margin-top: 12px; }
+    .download-btn {
+      display: inline-block;
+      margin-top: 12px;
+      padding: 10px 24px;
+      background: linear-gradient(90deg, #10b981, #059669);
+      color: white;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .footer { margin-top: 40px; font-size: 13px; color: #555; }
+  </style>
+</head>
+<body>
+  <div style="text-align:center">
+    <h1>HeartMuLa</h1>
+    <p class="subtitle">AI-Powered Music Generation</p>
+  </div>
+
+  <div class="card">
+    <label>Lyrics</label>
+    <textarea id="lyrics" placeholder="Write your song lyrics here..."></textarea>
+
+    <label>Style / Tags</label>
+    <input id="tags" placeholder="e.g. pop, piano, happy, female vocal" />
+
+    <label>Duration</label>
+    <select id="duration">
+      <option value="30000">30 seconds</option>
+      <option value="60000">1 minute</option>
+      <option value="120000" selected>2 minutes</option>
+      <option value="180000">3 minutes</option>
+      <option value="240000">4 minutes (max)</option>
+    </select>
+
+    <button id="generateBtn" onclick="generate()">Generate Music</button>
+
+    <div class="status-box" id="statusBox">
+      <div class="icon" id="statusIcon"></div>
+      <div id="statusMsg"></div>
+      <div class="hint" id="statusHint"></div>
+    </div>
+
+    <div class="error-box" id="errorBox"></div>
+
+    <div class="audio-section" id="audioSection">
+      <div class="ready">Your music is ready!</div>
+      <div class="time" id="inferenceTime"></div>
+      <audio controls id="audioPlayer"></audio>
+      <div>
+        <a class="download-btn" id="downloadBtn" download="heartmula-output.mp3">Download MP3</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">Powered by HeartMuLa AI</div>
+
+  <script>
+    const POLL_INTERVAL = 3000;
+    let pollTimer = null;
+
+    async function generate() {
+      const lyrics = document.getElementById("lyrics").value.trim();
+      const tags = document.getElementById("tags").value.trim();
+      const duration_ms = parseInt(document.getElementById("duration").value);
+
+      if (!lyrics || !tags) return;
+
+      const btn = document.getElementById("generateBtn");
+      btn.disabled = true;
+      btn.textContent = "Generating...";
+
+      hide("errorBox");
+      hide("audioSection");
+      showStatus("🚀", "Submitting job...", "");
+
+      try {
+        const res = await fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ lyrics, tags, duration_ms }),
+        });
+
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || "Request failed");
+        }
+
+        const data = await res.json();
+        showStatus("⏳", "Waiting in queue...", "This may take 1-3 minutes...");
+        pollStatus(data.jobId);
+      } catch (err) {
+        showError(err.message);
+        resetBtn();
+      }
+    }
+
+    function pollStatus(jobId) {
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/status/${jobId}`);
+          const data = await res.json();
+
+          if (data.status === "IN_PROGRESS") {
+            showStatus("🎵", "Generating your music...", "This may take 1-3 minutes...");
+          }
+
+          if (data.status === "COMPLETED") {
+            clearInterval(pollTimer);
+            pollTimer = null;
+
+            if (data.output && data.output.status === "success" && data.output.audio_base64) {
+              const bytes = atob(data.output.audio_base64);
+              const arr = new Uint8Array(bytes.length);
+              for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+              const blob = new Blob([arr], { type: "audio/mpeg" });
+              const url = URL.createObjectURL(blob);
+
+              document.getElementById("audioPlayer").src = url;
+              document.getElementById("downloadBtn").href = url;
+              if (data.output.inference_time_sec) {
+                document.getElementById("inferenceTime").textContent = `Generated in ${data.output.inference_time_sec}s`;
+              }
+              hide("statusBox");
+              show("audioSection");
+            } else {
+              showError(data.output?.message || "Generation failed");
+              hide("statusBox");
+            }
+            resetBtn();
+          }
+
+          if (data.status === "FAILED") {
+            clearInterval(pollTimer);
+            pollTimer = null;
+            showError(data.error || "Job failed");
+            hide("statusBox");
+            resetBtn();
+          }
+        } catch (err) {
+          console.error("Poll error:", err);
+        }
+      }, POLL_INTERVAL);
+    }
+
+    function showStatus(icon, msg, hint) {
+      const box = document.getElementById("statusBox");
+      document.getElementById("statusIcon").textContent = icon;
+      document.getElementById("statusMsg").textContent = msg;
+      document.getElementById("statusHint").textContent = hint;
+      box.style.display = "block";
+    }
+
+    function showError(msg) {
+      const box = document.getElementById("errorBox");
+      box.textContent = msg;
+      box.style.display = "block";
+    }
+
+    function show(id) { document.getElementById(id).style.display = "block"; }
+    function hide(id) { document.getElementById(id).style.display = "none"; }
+    function resetBtn() {
+      const btn = document.getElementById("generateBtn");
+      btn.disabled = false;
+      btn.textContent = "Generate Music";
+    }
+  </script>
+</body>
+</html>
