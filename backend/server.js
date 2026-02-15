@@ -161,7 +161,10 @@ app.post("/api/cancel/:jobId", async (req, res) => {
 
 // ─── Serve frontend ───
 app.use(express.static(path.join(__dirname, "public")));
-app.get("*", (_req, res) => {
+app.get("*", (req, res) => {
+  if (req.path.startsWith("/api/")) {
+    return res.status(404).json({ error: "Not found" });
+  }
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
