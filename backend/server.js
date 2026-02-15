@@ -23,18 +23,7 @@ if (!RUNPOD_API_KEY || !RUNPOD_ENDPOINT_ID) {
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json({ limit: "1mb" }));
 
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || "http://localhost:3000")
-  .split(",")
-  .map((s) => s.trim());
-
-app.use(
-  cors({
-    origin: (origin, cb) => {
-      if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
-      cb(new Error("Not allowed by CORS"));
-    },
-  })
-);
+app.use(cors());
 
 const limiter = rateLimit({
   windowMs: 60 * 1000,
