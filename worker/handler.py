@@ -151,6 +151,14 @@ if __name__ == "__main__":
     if torch.cuda.is_available():
         log.info(f"GPU: {torch.cuda.get_device_name(0)}")
         log.info(f"VRAM: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f} GB")
+        log.info(f"CUDA arch: {torch.cuda.get_device_capability(0)}")
+
+    # Diagnostics: verify bitsandbytes CUDA support
+    try:
+        import bitsandbytes as bnb
+        log.info(f"bitsandbytes version: {bnb.__version__}")
+    except Exception as e:
+        log.warning(f"bitsandbytes import issue: {e}")
 
     # Verify checkpoints exist
     if os.path.exists(CHECKPOINTS_PATH):
