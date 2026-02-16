@@ -17,7 +17,7 @@ log = logging.getLogger("heartmula-worker")
 
 # ─── Global singleton: load model ONCE, reuse across requests ───
 PIPELINE = None
-CHECKPOINTS_PATH = os.environ.get("CHECKPOINTS_PATH", "/runpod-volume/checkpoints")
+CHECKPOINTS_PATH = os.environ.get("CHECKPOINTS_PATH", "/app/checkpoints")
 
 # ─── Limits ───
 MAX_DURATION_MS = int(os.environ.get("MAX_DURATION_MS", "240000"))  # 4 minutes max
@@ -150,7 +150,14 @@ if __name__ == "__main__":
 
     if torch.cuda.is_available():
         log.info(f"GPU: {torch.cuda.get_device_name(0)}")
-        log.info(f"VRAM: {torch.cuda.get_device_properties(0).total_mem / 1024**3:.1f} GB")
+        log.info(f"VRAM: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f} GB")
+
+    # Verify checkpoints exist
+    if os.path.exists(CHECKPOINTS_PATH):
+        items = os.listdir(CHECKPOINTS_PATH)
+        log.info(f"Checkpoints found: {items}")
+    else:
+        log.error(f"CHECKPOINTS_PATH NOT FOUND: {CHECKPOINTS_PATH}")
 
     # Preload model at startup (reduces first request latency)
     load_model()
