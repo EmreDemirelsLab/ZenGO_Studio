@@ -3,10 +3,12 @@ RunPod Serverless Handler for HeartMuLa Music Generation
 """
 
 import os
+import subprocess
 import time
 import uuid
 import logging
 import tempfile
+from pathlib import Path
 
 import torch
 import runpod
@@ -17,11 +19,74 @@ log = logging.getLogger("heartmula-worker")
 
 # ─── Global singleton: load model ONCE, reuse across requests ───
 PIPELINE = None
-CHECKPOINTS_PATH = os.environ.get("CHECKPOINTS_PATH", "/app/checkpoints")
+CHECKPOINTS_PATH = os.environ.get("CHECKPOINTS_PATH", "/runpod-volume/checkpoints")
 
 # ─── Limits ───
 MAX_DURATION_MS = int(os.environ.get("MAX_DURATION_MS", "240000"))  # 4 minutes max
 JOB_TIMEOUT_SEC = int(os.environ.get("JOB_TIMEOUT_SEC", "300"))     # 5 minutes max
+
+
+def _parse_int(value, default, min_value=None, max_value=None):
+    """Parse int safely with optional bounds."""
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        parsed = default
+
+    if min_value is not None:
+        parsed = max(min_value, parsed)
+    if max_value is not None:
+        parsed = min(max_value, parsed)
+    return parsed
+
+
+def _parse_float(value, default, min_value=None, max_value=None):
+    """Parse float safely with optional bounds."""
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        parsed = default
+
+    if min_value is not None:
+        parsed = max(min_value, parsed)
+    if max_value is not None:
+        parsed = min(max_value, parsed)
+    return parsed
+
+
+def ensure_checkpoints():
+    """Download checkpoints to network volume if not already present.
+
+    Uses a marker file to avoid re-downloading on subsequent cold starts.
+    The network volume persists across worker restarts.
+    """
+    marker = Path(CHECKPOINTS_PATH) / ".download_complete"
+    if marker.exists():
+        log.info("Checkpoints already on network volume (marker found).")
+        return
+
+    log.info("Checkpoints not found on network volume. Downloading...")
+    os.makedirs(CHECKPOINTS_PATH, exist_ok=True)
+
+    downloads = [
+        ("HeartMuLa/HeartMuLaGen", CHECKPOINTS_PATH),
+        ("HeartMuLa/HeartMuLa-oss-3B-happy-new-year", f"{CHECKPOINTS_PATH}/HeartMuLa-oss-3B"),
+        ("HeartMuLa/HeartCodec-oss-20260123", f"{CHECKPOINTS_PATH}/HeartCodec-oss"),
+    ]
+
+    for repo_id, local_dir in downloads:
+        log.info(f"  Downloading {repo_id} → {local_dir}")
+        start = time.time()
+        subprocess.run(
+            ["huggingface-cli", "download", repo_id, "--local-dir", local_dir],
+            check=True,
+        )
+        elapsed = time.time() - start
+        log.info(f"  {repo_id} downloaded in {elapsed:.0f}s")
+
+    # Mark download complete
+    marker.touch()
+    log.info("All checkpoints downloaded successfully.")
 
 
 def load_model():
@@ -31,6 +96,9 @@ def load_model():
     if PIPELINE is not None:
         log.info("Pipeline already loaded, reusing.")
         return PIPELINE
+
+    # Ensure checkpoints are on the network volume
+    ensure_checkpoints()
 
     log.info(f"Loading HeartMuLa pipeline from {CHECKPOINTS_PATH} ...")
     start = time.time()
@@ -83,10 +151,10 @@ def handler(job):
     if not tags:
         return {"status": "error", "message": "tags is required"}
 
-    duration_ms = min(int(job_input.get("duration_ms", 120000)), MAX_DURATION_MS)
-    temperature = float(job_input.get("temperature", 1.0))
-    topk = int(job_input.get("topk", 50))
-    cfg_scale = float(job_input.get("cfg_scale", 1.5))
+    duration_ms = _parse_int(job_input.get("duration_ms", 120000), 120000, min_value=1000, max_value=MAX_DURATION_MS)
+    temperature = _parse_float(job_input.get("temperature", 1.0), 1.0, min_value=0.1, max_value=5.0)
+    topk = _parse_int(job_input.get("topk", 50), 50, min_value=1, max_value=200)
+    cfg_scale = _parse_float(job_input.get("cfg_scale", 1.5), 1.5, min_value=0.1, max_value=10.0)
 
     log.info(f"Job {job['id']}: lyrics={len(lyrics)} chars, tags='{tags}', duration={duration_ms}ms")
 
@@ -160,14 +228,10 @@ if __name__ == "__main__":
     except Exception as e:
         log.warning(f"bitsandbytes import issue: {e}")
 
-    # Verify checkpoints exist
-    if os.path.exists(CHECKPOINTS_PATH):
-        items = os.listdir(CHECKPOINTS_PATH)
-        log.info(f"Checkpoints found: {items}")
-    else:
-        log.error(f"CHECKPOINTS_PATH NOT FOUND: {CHECKPOINTS_PATH}")
-
-    # Preload model at startup (reduces first request latency)
-    load_model()
+    # Preload model (downloads checkpoints on first run, then loads into GPU)
+    try:
+        load_model()
+    except Exception as e:
+        log.warning(f"Preload skipped due to startup issue: {e}")
 
     runpod.serverless.start({"handler": handler})

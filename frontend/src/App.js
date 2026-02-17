@@ -246,7 +246,7 @@ export default function App() {
   return (
     <div style={STYLES.container}>
       <div style={STYLES.header}>
-        <h1 style={STYLES.title}>HeartMuLa</h1>
+        <h1 style={STYLES.title}>ZenGo Studio</h1>
         <p style={STYLES.subtitle}>AI-Powered Music Generation</p>
       </div>
 
@@ -335,7 +335,7 @@ export default function App() {
       </div>
 
       <div style={{ marginTop: 40, fontSize: 13, color: "#555" }}>
-        Powered by HeartMuLa AI
+        Powered by ZenGoSoft
       </div>
     </div>
   );

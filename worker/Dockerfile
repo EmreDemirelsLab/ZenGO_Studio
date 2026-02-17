@@ -17,18 +17,16 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Install heartlib from GitHub (may compile custom CUDA kernels)
 RUN pip install --no-cache-dir git+https://github.com/HeartMuLa/heartlib.git
 
-# Download model checkpoints (separate layers for retry resilience)
-RUN huggingface-cli download HeartMuLa/HeartMuLaGen --local-dir /app/checkpoints
-RUN huggingface-cli download HeartMuLa/HeartMuLa-oss-3B-happy-new-year --local-dir /app/checkpoints/HeartMuLa-oss-3B
-RUN huggingface-cli download HeartMuLa/HeartCodec-oss-20260123 --local-dir /app/checkpoints/HeartCodec-oss
-
-# Copy handler
+# Copy handler (checkpoints loaded from network volume at runtime)
 COPY handler.py .
 
-# Environment - point to embedded checkpoints
-ENV CHECKPOINTS_PATH=/app/checkpoints
+# Environment - checkpoints on network volume mounted at /runpod-volume
+ENV CHECKPOINTS_PATH=/runpod-volume/checkpoints
 ENV MAX_DURATION_MS=240000
 ENV JOB_TIMEOUT_SEC=300
 ENV PYTHONUNBUFFERED=1
+
+# Allow extra time for first-run checkpoint download
+ENV RUNPOD_INIT_TIMEOUT=900
 
 CMD ["python", "-u", "handler.py"]
